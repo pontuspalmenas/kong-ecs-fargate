@@ -17,6 +17,13 @@ resource "aws_security_group" "kong_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port = 8100
+    to_port   = 8100
+    protocol  = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port = 0
     to_port   = 0
@@ -37,6 +44,14 @@ resource "aws_ecs_service" "kong" {
     assign_public_ip = true
     security_groups = [aws_security_group.kong_sg.id]
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.kong.arn
+    container_name   = "kong"
+    container_port   = 8000
+  }
+
+  depends_on = [aws_lb_listener.https]
 }
 
 locals {
@@ -52,6 +67,7 @@ locals {
     KONG_LUA_SSL_TRUSTED_CERTIFICATE = "system"
     KONG_KONNECT_MODE = "on"
     KONG_ROUTER_FLAVOR = "expressions"
+    KONG_STATUS_LISTEN = "0.0.0.0:8100"
   }
 }
 
@@ -77,7 +93,12 @@ resource "aws_ecs_task_definition" "kong" {
           containerPort = 8443
           hostPort      = 8443
           protocol      = "tcp"
-        }
+        },
+        {
+          containerPort = 8100
+          hostPort      = 8100
+          protocol      = "tcp"
+        },
       ]
       environment = [
         for k, v in local.env_vars : {

@@ -23,3 +23,8 @@ variable "aws_secretsmanager_kong_cert_key_arn" {
   type = string
   description = "Amazon Resource Name (ARN) of AWS secrets manager cert key"
 }
+
+variable "aws_acm_certificate_arn" {
+  type = string
+  description = "ARN of the ACM certificate for the ALB"
+}
