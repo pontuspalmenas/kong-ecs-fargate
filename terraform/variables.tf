@@ -9,11 +9,6 @@ variable "kong_cluster_region" {
   default = "eu"
 }
 
-variable "aws_account_id" {
-  type = string
-  description = "The AWS account id"
-}
-
 variable "aws_secretsmanager_kong_cert_arn" {
   type = string
   description = "Amazon Resource Name (ARN) of AWS secrets manager cert (PEM-encoded)"
