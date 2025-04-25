@@ -40,8 +40,8 @@ resource "aws_ecs_service" "kong" {
   desired_count   = 1
 
   network_configuration {
-    subnets          = module.vpc.public_subnets
-    assign_public_ip = true
+    subnets          = module.vpc.private_subnets
+    assign_public_ip = false
     security_groups = [aws_security_group.kong_sg.id]
   }
 
