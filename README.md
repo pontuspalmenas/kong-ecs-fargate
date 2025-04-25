@@ -6,15 +6,22 @@
 > This is purposefully kept simple just for demo purposes, it is not suited for production.
 
 ## Features
-* Sets up ECS on Fargate (50/50 SPOT).
-* Application Load Balancer (ALB).
+* Kong Gateway on ECS Fargate (50/50 SPOT) for use with Konnect.
+* Application Load Balancer (ALB) with Health checks using Kong status listener (port `8100`).
 * Certificate for Gateway <-> Konnect mTLS in Secrets Manager.
-* Logging with CloudWatch Logs.
+* Logging with CloudWatch Logs (group `/aws/ecs/kong`).
+* 
+
+## Limitations
+* Uses default, non-hardened Kong image
+* Does not scale automatically
+* Uses self-signed certificate
+* Uses HTTP between ALB and Kong Gateway
 
 ## Considerations
 * Use ECS Service Auto Scaling with target metric or CloudWatch Alarms.
 * Use Konnect Vault to manage reading from Secrets Manager.
-* 
+* Add Amazon CA cert to Kong Gateway to re-encrypt ALB->ECS
 
 ## Initial setup
 This Terraform config expects an S3 backend. Create a `backend-config.tfbackend` file like:
@@ -38,6 +45,10 @@ You will also need a certificate (cert.pem, cert.key) in AWS Secrets Manager in 
 ```hcl
 aws_secretsmanager_kong_cert_arn = "arn:aws:secretsmanager:eu-north-1:555555555555:secret:my-project/cert.pem-abc123"
 aws_secretsmanager_kong_cert_key_arn = "arn:aws:secretsmanager:eu-north-1:412431539555:secret:my-project/cert.key-abc123"
+```
+
+And finally a cert in AWS Certificate Manager (ACM) for the ALB:
+```hcl
 aws_acm_certificate_arn = "arn:aws:acm:eu-north-1:555555555555:certificate/12345678-1234-4abc-8def-abcdefabcdef"
 ```
 
