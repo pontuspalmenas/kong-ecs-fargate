@@ -44,13 +44,18 @@ aws_acm_certificate_arn = "arn:aws:acm:eu-north-1:555555555555:certificate/12345
 ### Deploy
 ```bash
 terraform apply -var-file=lab.tfvars
+
+Outputs:
+
+aws_lb_kong_dns_name = "my-project-123456789.eu-north-1.elb.amazonaws.com"
 ```
 
 ### Test
+
 ```bash
-curl -ki https://<aws_lb_kong_dns_name>:8443/hello
-```
-```
+$ export PROXY=$(terraform output -raw aws_lb_kong_dns_name) 
+$ curl -ki https://$PROXY:8443/hello
+
 HTTP/2 404
 date: Fri, 25 Apr 2025 08:50:10 GMT
 content-type: application/json; charset=utf-8
