@@ -70,7 +70,6 @@ locals {
     KONG_STATUS_LISTEN                 = "0.0.0.0:8100"
   }
   dd_env_vars = {
-    #DD_SITE = "datadoghq.eu"
     DD_API_KEY                           = var.datadog_api_key
     ECS_FARGATE                          = "true"
     DD_LOGS_ENABLED                      = "true"
@@ -81,6 +80,7 @@ locals {
     DD_SOURCE                            = "ecs"
     DD_ENV                               = "cx-sandbox"
     DD_ECS_TASK_COLLECTION_ENABLED       = "true"
+    DEBUG_DEPLOYED_AT                    = timestamp()
   }
 }
 
@@ -130,20 +130,6 @@ resource "aws_ecs_task_definition" "kong" {
           valueFrom = var.aws_secretsmanager_kong_cert_key_arn,
         }
       ]
-      logConfiguration : {
-        logDriver : "awsfirelens",
-        options : {
-          Name : "datadog",
-          Host : "http-intake.logs.datadoghq.com",
-          TLS : "on",
-          apikey : var.datadog_api_key,
-          dd_service : local.dd_env_vars.DD_SERVICE,
-          dd_source : "httpd",
-          dd_tags : "owner:pontus.palmenas@konghq.com",
-          provider : "ecs",
-          retry_limit : "2"
-        }
-      }
     },
     {
       name      = "datadog-agent"
@@ -164,12 +150,6 @@ resource "aws_ecs_task_definition" "kong" {
           value = v
         }
       ]
-      #secrets = [
-      #  {
-      #    name = "DD_API_KEY"
-      #    valueFrom = var.aws_secretsmanager_datadog_key_arn
-      #  }
-      #]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -180,22 +160,13 @@ resource "aws_ecs_task_definition" "kong" {
       }
     },
     {
-      name      = "log_router"
-      image     = "amazon/aws-for-fluent-bit:latest"
-      essential = true
-      firelensConfiguration = {
-        type = "fluentbit"
-        options = {
-          enable-ecs-log-metadata = "false"
-          config-file-type        = "file"
-          config-file-value       = "/fluent-bit/config/custom.conf"
-        }
-      }
-      mountPoints = [
-        {
-          containerPath = "/fluent-bit/config"
-          sourceVolume  = "fluentbit-config"
-          readOnly      = true
+      name        = "fluentbit"
+      image       = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/pontus-custom-fluentbit:latest"
+      essential   = true
+      environment = [
+        for k, v in local.dd_env_vars : {
+          name  = k
+          value = v
         }
       ]
       portMappings = [
@@ -205,6 +176,14 @@ resource "aws_ecs_task_definition" "kong" {
           protocol      = "tcp"
         }
       ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/aws/ecs/fluentbit"
+          awslogs-region        = local.region
+          awslogs-stream-prefix = "fluentbit"
+        }
+      }
     }
   ])
 }

@@ -32,3 +32,11 @@ variable "aws_secretsmanager_datadog_key_arn" {
 variable "datadog_api_key" {
   type = string
 }
+
+variable "aws_account_id" {
+  type = string
+}
+
+variable "aws_region" {
+  type = string
+}

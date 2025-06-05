@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  REGION: eu-north-1
+  REPO: pontus-custom-fluentbit
+  TAG: latest
+  ACCOUNT_ID:
+    sh: aws sts get-caller-identity --query Account --output text
+  ECR_REPO: "{{.ACCOUNT_ID}}.dkr.ecr.{{.REGION}}.amazonaws.com/{{.REPO}}"
+
+tasks:
+  build:
+    desc: Build custom Fluent Bit Docker image
+    cmds:
+      - docker build --platform linux/amd64 -t {{.REPO}}:{{.TAG}} .
+
+  tag:
+    desc: Tag image for ECR
+    deps: [build]
+    cmds:
+      - docker tag {{.REPO}}:{{.TAG}} {{.ECR_REPO}}:{{.TAG}}
+
+  login:
+    desc: Log in to ECR
+    cmds:
+      - aws ecr get-login-password --region {{.REGION}} | docker login --username AWS --password-stdin {{.ACCOUNT_ID}}.dkr.ecr.{{.REGION}}.amazonaws.com
+
+  push:
+    desc: Push image to ECR
+    deps: [login, tag]
+    cmds:
+      - docker push {{.ECR_REPO}}:{{.TAG}}
+
+  create-ecr:
+    desc: Create ECR repo if it doesn't exist
+    cmds:
+      - |
+        aws ecr describe-repositories --repository-names {{.REPO}} --region {{.REGION}} >/dev/null 2>&1 || \
+        aws ecr create-repository --repository-name {{.REPO}} --region {{.REGION}}
+
+  publish:
+    desc: Create repo, build, tag, and push image to ECR
+    deps: [create-ecr, push]
