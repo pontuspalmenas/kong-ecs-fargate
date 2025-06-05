@@ -23,3 +23,12 @@ variable "aws_acm_certificate_arn" {
   type = string
   description = "ARN of the ACM certificate for the ALB"
 }
+
+variable "aws_secretsmanager_datadog_key_arn" {
+  type = string
+  description = "Amazon Resource Name (ARN) of AWS secrets manager datadog api key"
+}
+
+variable "datadog_api_key" {
+  type = string
+}

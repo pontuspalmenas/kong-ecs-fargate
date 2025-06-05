@@ -56,26 +56,39 @@ resource "aws_ecs_service" "kong" {
 
 locals {
   env_vars = {
-    KONG_ROLE = "data_plane"
-    KONG_DATABASE = "off"
-    KONG_VITALS = "off"
-    KONG_CLUSTER_MTLS = "pki"
-    KONG_CLUSTER_CONTROL_PLANE = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.cp0.konghq.com:443"
-    KONG_CLUSTER_SERVER_NAME = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.cp0.konghq.com"
-    KONG_CLUSTER_TELEMETRY_ENDPOINT = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.tp0.konghq.com:443"
+    KONG_ROLE                          = "data_plane"
+    KONG_DATABASE                      = "off"
+    KONG_VITALS                        = "off"
+    KONG_CLUSTER_MTLS                  = "pki"
+    KONG_CLUSTER_CONTROL_PLANE         = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.cp0.konghq.com:443"
+    KONG_CLUSTER_SERVER_NAME           = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.cp0.konghq.com"
+    KONG_CLUSTER_TELEMETRY_ENDPOINT    = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.tp0.konghq.com:443"
     KONG_CLUSTER_TELEMETRY_SERVER_NAME = "${var.kong_cluster_prefix}.${var.kong_cluster_region}.tp0.konghq.com"
-    KONG_LUA_SSL_TRUSTED_CERTIFICATE = "system"
-    KONG_KONNECT_MODE = "on"
-    KONG_ROUTER_FLAVOR = "expressions"
-    KONG_STATUS_LISTEN = "0.0.0.0:8100"
+    KONG_LUA_SSL_TRUSTED_CERTIFICATE   = "system"
+    KONG_KONNECT_MODE                  = "on"
+    KONG_ROUTER_FLAVOR                 = "expressions"
+    KONG_STATUS_LISTEN                 = "0.0.0.0:8100"
+  }
+  dd_env_vars = {
+    #DD_SITE = "datadoghq.eu"
+    DD_API_KEY                           = var.datadog_api_key
+    ECS_FARGATE                          = "true"
+    DD_LOGS_ENABLED                      = "true"
+    DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL = "true"
+    DD_DOGSTATSD                         = "true"
+    DD_APM_ENABLED                       = "true"
+    DD_SERVICE                           = "pontus-kong-ecs"
+    DD_SOURCE                            = "ecs"
+    DD_ENV                               = "cx-sandbox"
+    DD_ECS_TASK_COLLECTION_ENABLED       = "true"
   }
 }
 
 resource "aws_ecs_task_definition" "kong" {
   family             = "kong"
   requires_compatibilities = ["FARGATE"]
-  cpu                = "256"
-  memory             = "512"
+  cpu                = "512"
+  memory             = "1024"
   network_mode       = "awsvpc"
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
 
@@ -88,6 +101,7 @@ resource "aws_ecs_task_definition" "kong" {
           containerPort = 8000
           hostPort      = 8000
           protocol      = "tcp"
+          name          = "proxy"
         },
         {
           containerPort = 8443
@@ -108,22 +122,89 @@ resource "aws_ecs_task_definition" "kong" {
       ]
       secrets = [
         {
-          name = "KONG_CLUSTER_CERT"
+          name      = "KONG_CLUSTER_CERT"
           valueFrom = var.aws_secretsmanager_kong_cert_arn,
         },
         {
-          name = "KONG_CLUSTER_CERT_KEY"
+          name      = "KONG_CLUSTER_CERT_KEY"
           valueFrom = var.aws_secretsmanager_kong_cert_key_arn,
         }
       ]
+      logConfiguration : {
+        logDriver : "awsfirelens",
+        options : {
+          Name : "datadog",
+          Host : "http-intake.logs.datadoghq.com",
+          TLS : "on",
+          apikey : var.datadog_api_key,
+          dd_service : local.dd_env_vars.DD_SERVICE,
+          dd_source : "httpd",
+          dd_tags : "owner:pontus.palmenas@konghq.com",
+          provider : "ecs",
+          retry_limit : "2"
+        }
+      }
+    },
+    {
+      name      = "datadog-agent"
+      image     = "public.ecr.aws/datadog/agent:latest"
+      essential = false
+
+      portMappings = [
+        {
+          containerPort = 8125
+          hostPort      = 8125
+          protocol      = "udp"
+        }
+      ]
+
+      environment = [
+        for k, v in local.dd_env_vars : {
+          name  = k
+          value = v
+        }
+      ]
+      #secrets = [
+      #  {
+      #    name = "DD_API_KEY"
+      #    valueFrom = var.aws_secretsmanager_datadog_key_arn
+      #  }
+      #]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = "/aws/ecs/kong"
+          awslogs-group         = "/aws/ecs/datadog"
           awslogs-region        = local.region
-          awslogs-stream-prefix = "kong"
+          awslogs-stream-prefix = "datadog"
         }
       }
+    },
+    {
+      name      = "log_router"
+      image     = "amazon/aws-for-fluent-bit:latest"
+      essential = true
+      firelensConfiguration = {
+        type = "fluentbit"
+        options = {
+          enable-ecs-log-metadata = "false"
+          config-file-type        = "file"
+          config-file-value       = "/fluent-bit/config/custom.conf"
+        }
+      }
+      mountPoints = [
+        {
+          containerPath = "/fluent-bit/config"
+          sourceVolume  = "fluentbit-config"
+          readOnly      = true
+        }
+      ]
+      portMappings = [
+        {
+          containerPort = 9880
+          hostPort      = 9880
+          protocol      = "tcp"
+        }
+      ]
     }
   ])
 }

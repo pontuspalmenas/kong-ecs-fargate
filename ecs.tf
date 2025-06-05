@@ -26,13 +26,15 @@ resource "aws_iam_role" "ecs_task_execution" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = {
-        Service = "ecs-tasks.amazonaws.com"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
       }
-    }]
+    ]
   })
 }
 
@@ -54,8 +56,30 @@ resource "aws_iam_policy" "ecs_secrets_access" {
         ]
         Resource = [
           var.aws_secretsmanager_kong_cert_arn,
-          var.aws_secretsmanager_kong_cert_key_arn
+          var.aws_secretsmanager_kong_cert_key_arn,
+          var.aws_secretsmanager_datadog_key_arn
         ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "ecs_datadog" {
+  name = "ecs-datadog"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:ListClusters",
+          "ecs:ListContainerInstances",
+          "ecs:DescribeContainerInstances",
+          "ec2:Describe*",
+          "ec2:GetInstanceMetadataDefaults"
+        ]
+        Resource = "*"
       }
     ]
   })
