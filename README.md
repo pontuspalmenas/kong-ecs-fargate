@@ -23,6 +23,18 @@
 * Use Konnect Vault to manage reading from Secrets Manager.
 * Add Amazon CA cert to Kong Gateway to re-encrypt ALB->ECS
 
+## Datadog setup
+> [!WARNING]
+> This is just a Proof of Concept. Very experimental.
+
+1. Create the fluent-bit image, push it to ECR, and have it used as a sidecar in the task definition (see Terraform `ecs.tf`).
+```bash
+task -t fluentbit/Taskfile.yml publish
+```
+
+2. In Konnect, configure the HTTP Log plugin with host: http://localhost:9880
+3. Configure the StatsD plugin, port: 8125
+
 ## Initial setup
 This Terraform config expects an S3 backend. Create a `backend-config.tfbackend` file like:
 
@@ -80,4 +92,6 @@ x-kong-request-id: eced566fbaa0335dfa8ed111e9e3ed54
   "request_id":"eced566fbaa0335dfa8ed111e9e3ed54"
 }
 ```
+
+Now you're ready to start publishing your APIs.
 
